@@ -14,7 +14,7 @@ int main() {
   if (Process32First(snapshot, &entry) == TRUE) {
     while (Process32Next(snapshot, &entry) == TRUE) {
       if (strcmp(entry.szExeFile, "a.exe") == 0) {
-        proc = OpenProcess(PROCESS_ALL_ACCESS, FALSE, entry.th32ProcessID);
+        proc = OpenProcess(PROCESS_VM_WRITE | PROCESS_VM_OPERATION | PROCESS_VM_READ, FALSE, entry.th32ProcessID);
         break;
       }
     }
@@ -32,6 +32,7 @@ int main() {
   SIZE_T bytesread;
 
   char tofind[19] = "You can't";
+  char hacked[20] = "GET HACKED";
   int len = strlen(tofind);
   void* it;
 
@@ -43,8 +44,31 @@ int main() {
     if (bytesread) {
       it = (void*) std::search((char*) lpbuffer, (char*) lpbuffer + bytesread, tofind, tofind + len);
       if (it != lpbuffer + bytesread) {
+        printf("Offset: %x\n", (long long)it - (long long)lpbuffer);
+        DWORD oldprotect;
+        //res = VirtualProtectEx(proc, info.BaseAddress, bytesread, 0x4, &oldprotect);
+        if (!res) {
+          std::cout << "Virtualprotect failed" << std::endl;
+        }
         printf("Found string at: %x\n", it);
         printf("String: %s\n", it);
+        SIZE_T bytes_written = 0;
+        res = WriteProcessMemory(proc, (void*)((long long)info.BaseAddress + (long long)it - (long long)lpbuffer), hacked, strlen(hacked), &bytes_written);
+        if (!res) {
+          LPTSTR pTmp = NULL;
+          DWORD errnum = GetLastError();
+          FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER|FORMAT_MESSAGE_FROM_SYSTEM|FORMAT_MESSAGE_ARGUMENT_ARRAY,
+                NULL, 
+                errnum, 
+                LANG_NEUTRAL,
+                (LPTSTR)&pTmp, 
+                0,
+                NULL
+                );
+          std::cout << pTmp << std::endl;
+        }
+        printf("Bytes injected: %d\n", bytes_written);
+        exit(0);
       }
     }
     free(lpbuffer);
